@@ -124,8 +124,36 @@ Block *firstFit(size_t size)
  */
 Block *nextFit(size_t size) 
 {
-  // Implement here...
-}
+  auto block = searchStart;
+  while(block!=nullptr)
+  {
+    // O(n) search
+    if(block->used || block->size < size)
+    {
+      block = block->next;
+      continue;
+    }
+    // Found a free block
+    searchStart = block;
+    return block;
+  }
+
+  block = heapStart;
+  while(block!=searchStart)
+  {
+    // O(n) search
+    if(block->used || block->size < size)
+    {
+      block = block->next;
+      continue;
+    }
+    // Found a free block
+    searchStart = block;
+    return block;
+  }
+  
+  return nullptr;
+};
  
 // Tries to find a block that fits.
 Block *findBlock(size_t size) 
@@ -136,13 +164,13 @@ Block *findBlock(size_t size)
     case SearchMode::NextFit:
       return nextFit(size);
   }
-}
+  return nullptr;
+};
 
 // Allocates a block of memory of (at least) `size` bytes.
 inline word_t *alloc(size_t size) 
 {
   std::cout << "Allocate block of (at least) size " << size << std::endl;
-
   // Align that compute appropriate num bytes for user data
   size_t user_size = align(size);
 
@@ -199,6 +227,35 @@ int main()
   auto p4b = getHeader(p4);
   assert(p4b->size == 8);
   assert(p4b == p2b);
+
+  // --------------------------------------
+  // Test case 5: Next search start position
+  //
+  // Init the heap, and the searching algorithm.
+  init(SearchMode::NextFit);
+
+  // [[8, 1], [8, 1], [8, 1]]
+  alloc(8);
+  alloc(8);
+  alloc(8);
+
+  // [[8, 1], [8, 1], [8, 1], [16, 1], [16, 1]]
+  auto o1 = alloc(16);
+  auto o2 = alloc(16);
+
+  // [[8, 1], [8, 1], [8, 1], [16, 0], [16, 0]]
+  free(o1);
+  free(o2);
+  
+  // [[8, 1], [8, 1], [8, 1], [16, 1], [16, 0]]
+  auto o3 = alloc(16);
+  
+  // Start position from o3:
+  assert(searchStart == getHeader(o3));
+  
+  // [[8, 1], [8, 1], [8, 1], [16, 1], [16, 1]]
+  //                           ^ start here
+  alloc(16);
 
   puts("\nAll assertions passed!\n");
   return 0;
