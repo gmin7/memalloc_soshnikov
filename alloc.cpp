@@ -57,12 +57,6 @@ Block *getHeader(word_t *data)
   // return (Block *)data - sizeof(std::declval<Block>().next) - sizeof(std::declval<Block>().used) - sizeof(std::declval<Block>().size);
 };
 
-void free(word_t *data)
-{
-  auto block = getHeader(data);
-  block->used = false;
-};
-
 /////// Block searching algos ///////
 
 // Mode for searching a free block.
@@ -218,6 +212,13 @@ Block *findBlock(size_t size)
   return nullptr;
 };
 
+size_t getHeaderSize()
+{
+  return sizeof(std::declval<Block>().size)
+       + sizeof(std::declval<Block>().used)
+       + sizeof(std::declval<Block>().next);
+};
+
 ///// Block Splitting /////
 
 // Splits the block on two, returns the pointer to the smaller sub-block.
@@ -227,10 +228,7 @@ Block *split(Block *block, size_t size)
   added_block->used = false;
   added_block->next = block->next;
   std::cout << "initial block size: " << block->size << std::endl;
-  added_block->size = block->size - size 
-                                  - sizeof(std::declval<Block>().size)
-                                  - sizeof(std::declval<Block>().used)
-                                  - sizeof(std::declval<Block>().next);
+  added_block->size = block->size - size - getHeaderSize();
 
   block->next = added_block;
   block->size = size;
@@ -248,8 +246,8 @@ inline bool canSplit(Block *block, size_t size)
 };
 
 // Allocates a block from the list, splitting if needed.
-Block *listAllocate(Block *block, size_t size) {
-
+Block *listAllocate(Block *block, size_t size) 
+{
   // Split the larger block, reusing the free part.
   if (canSplit(block, size)) 
   {
@@ -259,6 +257,32 @@ Block *listAllocate(Block *block, size_t size) {
   block->size = size;
   return block;
 };
+
+///// Block Coalescing /////
+
+bool canCoalesce(Block *block) 
+{
+  return block->next && !block->next->used;
+};
+ 
+Block *coalesce(Block *block) 
+{
+  block->size = block->size + block->next->size + getHeaderSize();
+  block->next = block->next->next;
+  block->used = false;
+  return block;
+};
+
+void free(word_t *data) 
+{
+  auto block = getHeader(data);
+  if (canCoalesce(block)) {
+    block = coalesce(block);
+  }
+  block->used = false;
+};
+
+///// Alloc /////
 
 // Allocates a block of memory of (at least) `size` bytes.
 inline word_t *alloc(size_t size) 
@@ -374,12 +398,13 @@ int main()
   assert(getHeader(z3) == getHeader(z1));
   // [[8, 1], [16, 1], [48, 0], [8, 1], [16, 1]]
 
-  // Test 7
+  // Test 7: Block splitting and coalescing
   std::cout << "Test 7" << std::endl;
+  assert(heapStart->next->next->size==31);
+  free(z3);
   std::cout << heapStart->size << std::endl;
   std::cout << heapStart->next->size << std::endl;
   std::cout << heapStart->next->next->size << std::endl;
-  assert(heapStart->next->next->size==48);
 
   puts("\nAll assertions passed!\n");
   return 0;
